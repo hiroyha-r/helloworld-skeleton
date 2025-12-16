@@ -1,0 +1,104 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: helloworld
+  title: Hello world app
+  description: シンプルなHelloWorldアプリをデプロイするためのテンプレート 
+  tags:
+    - recommended
+spec:
+  owner: user:default/bkuser1
+  type: website
+
+  parameters:
+    - title: 作成するComponentの情報
+      required:
+        - app_name
+        - owner
+      properties:
+        app_name:
+          title: アプリケーション名
+          description: 作成するアプリ名を指定してください。
+          type: string
+          default: "helloworld"
+        owner:
+          title: オーナー
+          type: string
+          description: 作成するComponentのオーナーを選択してください。
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind:
+                - Group
+                - User
+
+    - title: GitHubリポジトリの情報
+      required:
+        - git_repo_name
+        - git_host_url
+        - git_owner_name
+      properties:
+        git_repo_name:
+          title: GitHubリポジトリ名
+          description: 生成するGitHubリポジトリ名を入力してください。
+          type: string
+          default: helloworld
+        git_host_url:
+          title: GitHub URL
+          description: GitHubリポジトリのURLを入力してください。
+          type: string
+          default: github.com
+        git_owner_name:
+          title: GitHub Organization名
+          description: GitHubリポジトリを生成するGitHub Organization名を入力してください。
+          type: string
+          default: rhdh-practice
+  steps:
+    - id: fetch
+      name: Fetch skeleton 
+      action: fetch:template
+      input:
+        url: ./manifest-skeleton
+        values:
+          app_name: ${{ parameters.app_name }}
+          owner: ${{ parameters.owner }}
+          git_repo_name: ${{ parameters.git_repo_name }}
+          git_host_url: ${{ parameters.git_host_url }}
+          git_owner_name: ${{ parameters.git_owner_name }}
+        targetPath: ./tenant
+
+    - id: publish
+      name: Push to GitHub 
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.git_host_url }}?owner=${{ parameters.git_owner_name }}&repo=${{ parameters.git_repo_name }}
+        repoVisibility: public
+        sourcePath: ./tenant
+        defaultBranch: develop
+        protectDefaultBranch: false
+
+    - id: argocd
+      name: Deploy with ArgoCD
+      action: argocd:create-resources
+      input:
+        appName: ${{ parameters.app_name }}-init
+        argoInstance: main
+        namespace: openshift-gitops
+        repoUrl: https://${{ parameters.git_host_url }}/${{ parameters.git_owner_name }}/${{ parameters.git_repo_name }}.git
+        path: 'argocd/'
+
+    - id: register
+      name: Register Catalog into Developer Hub 
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: "/catalog-info.yaml"
+
+  output:
+    links:
+      - title: Componentを開く
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
+      - title: Gitリポジトリを開く
+        url: ${{ steps['publish'].output.remoteUrl }}
+        icon: github
