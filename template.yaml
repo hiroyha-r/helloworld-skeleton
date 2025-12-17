@@ -52,7 +52,7 @@ spec:
           title: GitHub Organization名
           description: GitHubリポジトリを生成するGitHub Organization名を入力してください。
           type: string
-          default: rhdh-practice
+          default: hhasebe-demo-org
   steps:
     - id: fetch
       name: Fetch skeleton 
